@@ -55,6 +55,16 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
 
+  // Handle Prisma connection errors (database unreachable)
+  if (err instanceof Prisma.PrismaClientInitializationError ||
+    err.message?.includes("Can't reach database server")) {
+    res.status(503).json({
+      success: false,
+      error: 'Service temporarily unavailable. Please try again later.',
+    });
+    return;
+  }
+
   // Handle unknown errors
   res.status(500).json({
     success: false,
