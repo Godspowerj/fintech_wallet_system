@@ -2,26 +2,44 @@ import Redis from 'ioredis';
 import { env } from './environment';
 import { logger } from '../utils/logger';
 
-// Main Redis connection (for general use)
-export const redis = new Redis(env.REDIS_URL, {
+// Track if Redis is available
+export let redisAvailable = false;
+
+// Redis connection options with better error handling
+const redisOptions = {
   maxRetriesPerRequest: 3,
-});
+  retryStrategy: (times: number) => {
+    if (times > 3) {
+      logger.warn('Redis connection failed after 3 retries. Running without Redis.');
+      return null; // Stop retrying
+    }
+    return Math.min(times * 200, 2000); // Retry with backoff
+  },
+  lazyConnect: true, // Don't connect immediately
+};
+
+// Main Redis connection (for general use)
+export const redis = new Redis(env.REDIS_URL, redisOptions);
 
 // Separate Redis connection for BullMQ
 // BullMQ REQUIRES maxRetriesPerRequest to be null
 export const bullmqRedis = new Redis(env.REDIS_URL, {
+  ...redisOptions,
   maxRetriesPerRequest: null,  // Required by BullMQ!
 });
 
 redis.on('connect', () => {
+  redisAvailable = true;
   logger.info('Redis connected');
 });
 
 redis.on('error', (err) => {
+  redisAvailable = false;
   logger.error('Redis error:', err);
 });
 
 redis.on('close', () => {
+  redisAvailable = false;
   logger.warn('Redis connection closed');
 });
 

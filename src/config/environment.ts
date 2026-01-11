@@ -58,8 +58,9 @@ const envSchema = z.object({
   // Format: postgresql://user:password@host:port/database
   DATABASE_URL: z.string().url(),
 
-  // Redis connection string (for caching and rate limiting)
-  REDIS_URL: z.string().url(),
+  // Redis connection string (for caching and queues)
+  // Optional - app will still work without Redis but with reduced functionality
+  REDIS_URL: z.string().optional().default('redis://localhost:6379'),
 
   // ==========================================================================
   // AUTHENTICATION (JWT)

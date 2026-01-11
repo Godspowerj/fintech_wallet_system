@@ -25,13 +25,13 @@ services:
           type: redis
           name: fintech-wallet-redis
           property: connectionString
-      - key: JWT_SECRET
+      - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
-      - key: JWT_EXPIRES_IN
+      - key: JWT_ACCESS_EXPIRY
         value: "15m"
-      - key: JWT_REFRESH_EXPIRES_IN
+      - key: JWT_REFRESH_EXPIRY
         value: "7d"
       - key: PAYSTACK_SECRET_KEY
         sync: false # You'll set this manually in Render dashboard
