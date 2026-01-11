@@ -19,7 +19,7 @@ export const generateIdempotencyKey = (userId: string, data: any): string => {
 
 export const sanitizeUser = (user: any) => {
   // Intentionally destructuring to remove sensitive fields
-  const { passwordHash: _pw, emailVerifyToken: _evt, resetPasswordToken: _rpt, ...sanitized } = user;
+  const { passwordHash: _removePasswordHash, emailVerifyToken: _removeEmailVerifyToken, resetPasswordToken: _removeResetToken, ...sanitized } = user;
   return sanitized;
 };
 

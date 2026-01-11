@@ -51,6 +51,7 @@ import walletRoutes from './modules/wallet/wallet.routes'; // Wallet management
 import transactionRoutes from './modules/transaction/transaction.routes'; // Money transfers
 import fraudRoutes from './modules/fraud/fraud.routes';     // Fraud detection
 import adminRoutes from './modules/admin/admin.routes';     // Admin dashboard
+import paymentRoutes from './modules/payment/payment.routes'; // Paystack payments
 
 // Create the Express application
 const app: Application = express();
@@ -107,7 +108,7 @@ app.get('/health', async (_req: Request, res: Response) => {
   try {
     // Test database connection with a simple query
     await prisma.$queryRaw`SELECT 1`;
-    
+
     // Check if Redis is connected
     const redisStatus = redis.status === 'ready' ? 'connected' : 'disconnected';
 
@@ -190,6 +191,7 @@ app.use('/api/wallets', walletRoutes);      // /api/wallets, /api/wallets/:id
 app.use('/api/transactions', transactionRoutes); // /api/transactions/transfer
 app.use('/api/fraud', fraudRoutes);         // /api/fraud/flags
 app.use('/api/admin', adminRoutes);         // /api/admin/users
+app.use('/api/payments', paymentRoutes);    // /api/payments/initialize, /api/payments/webhook
 
 // =============================================================================
 // ROOT ENDPOINT
@@ -204,9 +206,7 @@ app.get('/', (_req: Request, res: Response) => {
   });
 });
 
-// =============================================================================
-// ERROR HANDLING (must be LAST)
-// =============================================================================
+
 
 // 404 Handler: When someone requests a route that doesn't exist
 app.use(notFoundHandler);

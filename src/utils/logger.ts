@@ -1,6 +1,7 @@
 import winston from 'winston';
 import { isProduction } from '../config/environment';
 
+// Log format for all environments
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.errors({ stack: true }),
@@ -8,6 +9,7 @@ const logFormat = winston.format.combine(
   winston.format.json()
 );
 
+// Console format for development environment 
 const consoleFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -17,22 +19,26 @@ const consoleFormat = winston.format.combine(
       msg += ` ${JSON.stringify(meta)}`;
     }
     return msg;
+
   })
 );
 
+// Transports for different environments
 const transports: winston.transport[] = [
   new winston.transports.Console({
     format: isProduction ? logFormat : consoleFormat,
   }),
 ];
 
+
+// File transports for production environment
 if (isProduction) {
   transports.push(
     new winston.transports.File({
       filename: 'logs/error.log',
       level: 'error',
       format: logFormat,
-    }),
+    }), 
     new winston.transports.File({
       filename: 'logs/combined.log',
       format: logFormat,
@@ -40,6 +46,7 @@ if (isProduction) {
   );
 }
 
+// Create logger instance
 export const logger = winston.createLogger({
   level: isProduction ? 'info' : 'debug',
   format: logFormat,

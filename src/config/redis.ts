@@ -2,19 +2,15 @@ import Redis from 'ioredis';
 import { env } from './environment';
 import { logger } from '../utils/logger';
 
+// Main Redis connection (for general use)
 export const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: 3,
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  reconnectOnError(err) {
-    const targetError = 'READONLY';
-    if (err.message.includes(targetError)) {
-      return true;
-    }
-    return false;
-  },
+});
+
+// Separate Redis connection for BullMQ
+// BullMQ REQUIRES maxRetriesPerRequest to be null
+export const bullmqRedis = new Redis(env.REDIS_URL, {
+  maxRetriesPerRequest: null,  // Required by BullMQ!
 });
 
 redis.on('connect', () => {

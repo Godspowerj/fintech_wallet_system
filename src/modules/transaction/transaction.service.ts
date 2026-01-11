@@ -8,6 +8,7 @@ import {
   NotFoundError,
 } from '../../utils/errors';
 import { TransactionType, TransactionStatus, LedgerEntryType } from '@prisma/client';
+import { queueEmailNotification } from '../../queues/notification.queue';
 
 const walletService = new WalletService();
 const fraudService = new FraudService();
@@ -149,6 +150,29 @@ export class TransactionService {
         success: true,
         data: completedTransaction,
       });
+
+      // ========================================
+      // QUEUE EMAIL NOTIFICATIONS
+      // This is where YOU write the subject and message!
+      // ========================================
+
+      // Notify the SENDER that money was sent
+      if (completedTransaction?.sender) {
+        await queueEmailNotification(
+          completedTransaction.sender.id,                           // userId
+          'Transfer Successful ✅',                                  // subject - YOU write this!
+          `You successfully sent $${data.amount} to ${completedTransaction.receiver?.firstName || 'recipient'}.`  // message - YOU write this!
+        );
+      }
+
+      // Notify the RECEIVER that money was received
+      if (completedTransaction?.receiver) {
+        await queueEmailNotification(
+          completedTransaction.receiver.id,                         // userId
+          'Money Received! 💰',                                      // subject - YOU write this!
+          `You received $${data.amount} from ${completedTransaction.sender?.firstName || 'someone'}.`  // message - YOU write this!
+        );
+      }
 
       return completedTransaction;
     } finally {

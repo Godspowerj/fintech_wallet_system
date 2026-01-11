@@ -109,6 +109,30 @@ const envSchema = z.object({
   // Transfer-specific limits (stricter for money movements)
   TRANSFER_RATE_LIMIT_WINDOW: z.string().transform(Number).default('3600000'),
   TRANSFER_RATE_LIMIT_MAX: z.string().transform(Number).default('10'),
+
+  // ==========================================================================
+  // EMAIL (Resend)
+  // ==========================================================================
+
+  // Resend API key - get it from https://resend.com/api-keys
+  RESEND_API_KEY: z.string().optional(),
+
+  // Email sender address (must be verified domain in production)
+  FROM_EMAIL: z.string().default('FinWallet <onboarding@resend.dev>'),
+
+  // Frontend URL for email links
+  FRONTEND_URL: z.string().default('http://localhost:5173'),
+
+  // ==========================================================================
+  // PAYSTACK (Payment Gateway)
+  // ==========================================================================
+
+  // Paystack Secret Key - get from https://dashboard.paystack.com/settings/developers
+  // Use test key (sk_test_xxx) for development, live key (sk_live_xxx) for production
+  PAYSTACK_SECRET_KEY: z.string().optional(),
+
+  // Where to redirect user after payment (your frontend URL)
+  PAYSTACK_CALLBACK_URL: z.string().default('http://localhost:5173/payment/callback'),
 });
 
 /**

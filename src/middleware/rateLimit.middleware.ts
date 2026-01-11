@@ -5,7 +5,7 @@ import { env } from '../config/environment';
 // Basic rate limiter using in-memory store
 export const generalRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW,
-  max: env.RATE_LIMIT_MAX,
+  limit: env.RATE_LIMIT_MAX,
   message: {
     success: false,
     error: 'Too many requests, please try again later',

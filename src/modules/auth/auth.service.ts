@@ -52,6 +52,7 @@ import {
   BadRequestError,
 } from '../../utils/errors';
 import { UserRole } from '@prisma/client';
+import { sendPasswordResetEmail, sendVerificationEmail , sendWelcomeEmail } from '../../utils/email';
 
 export class AuthService {
   /**
@@ -66,7 +67,7 @@ export class AuthService {
     firstName: string;
     lastName: string;
   }) {
-    // Step 1: Check if user already exists
+
     // We use .toLowerCase() to make email comparison case-insensitive
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
@@ -77,7 +78,6 @@ export class AuthService {
       throw new ConflictError('User with this email already exists');
     }
 
-    // Step 2: Hash the password
     // NEVER store plain text passwords! bcrypt creates a one-way hash.
     // env.BCRYPT_ROUNDS controls how many times the hash is computed
     // Higher = more secure but slower (12 is a good balance)
@@ -109,7 +109,8 @@ export class AuthService {
     });
 
     // In production, you would send a verification email here:
-    // await sendVerificationEmail(user.email, emailVerifyToken);
+    await sendWelcomeEmail(user.email, user.firstName);
+
 
     // Return the user (without password hash) and a success message
     return {
@@ -125,10 +126,13 @@ export class AuthService {
    * @param password - User's password (plain text - will be compared to hash)
    * @returns User info and JWT tokens
    */
-  async login(email: string, password: string) {
+  async login(data: {
+    email: string;
+    password: string;
+  }) {
     // Step 1: Find the user by email
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: data.email.toLowerCase() },
     });
 
     // Security tip: Don't say "user not found" vs "wrong password"
@@ -139,7 +143,7 @@ export class AuthService {
 
     // Step 2: Verify password using bcrypt
     // bcrypt.compare() hashes the input and compares it to the stored hash
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    const isValidPassword = await bcrypt.compare(data.password, user.passwordHash);
 
     if (!isValidPassword) {
       throw new UnauthorizedError('Invalid credentials');
@@ -263,6 +267,7 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+
   /**
    * VERIFY EMAIL
    * 
@@ -285,6 +290,8 @@ export class AuthService {
         emailVerifyToken: null, // Clear the token so it can't be reused
       },
     });
+
+    await sendVerificationEmail(user.email, token);
 
     return { message: 'Email verified successfully' };
   }
@@ -317,7 +324,7 @@ export class AuthService {
       },
     });
 
-    // In production: await sendPasswordResetEmail(user.email, resetToken);
+     await sendPasswordResetEmail(user.email, resetToken);
 
     return { message: 'If the email exists, a reset link has been sent' };
   }
@@ -381,3 +388,5 @@ export class AuthService {
     return sanitizeUser(user);
   }
 }
+
+

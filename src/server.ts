@@ -27,6 +27,12 @@ import { logger } from './utils/logger';
 import { disconnectDatabase } from './config/database';
 import { disconnectRedis } from './config/redis';
 
+// Import the notification worker (background job processor)
+import { startNotificationWorker, stopNotificationWorker } from './workers/notification.worker';
+
+// Start the notification worker (it will watch Redis for new jobs)
+startNotificationWorker();
+
 // Get the port from environment variables, default to 3000
 const PORT = env.PORT || 3000;
 
@@ -69,6 +75,8 @@ const gracefulShutdown = async (signal: string) => {
     logger.info('HTTP server closed');
 
     try {
+      // Stop the notification worker (finish current jobs)
+      await stopNotificationWorker();
       // Close database connection
       await disconnectDatabase();
       // Close Redis connection
