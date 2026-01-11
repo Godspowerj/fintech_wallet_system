@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AnyZodObject, ZodError } from 'zod';
 import { ValidationError } from '../utils/errors';
-import { log } from 'node:console';
 
 
 // VALIDATION MIDDLEWARE
