@@ -1,5 +1,9 @@
+/*
+ * Notification worker - processes email/sms/push jobs from queue
+ */
+
 import { Worker, Job } from 'bullmq';
-import { bullmqRedis } from '../config/redis';  // Use BullMQ-compatible Redis
+import { bullmqRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
 import { sendGenericEmail } from '../utils/email';
@@ -14,10 +18,6 @@ interface NotificationJobData {
     metadata?: Record<string, unknown>;
 }
 
-/**
- * Notification background worker
- * Handles sending notifications asynchronously (email, SMS, push)
- */
 export const notificationWorker = new Worker<NotificationJobData>(
     'notifications',
     async (job: Job<NotificationJobData>) => {
@@ -59,7 +59,6 @@ export const notificationWorker = new Worker<NotificationJobData>(
     }
 );
 
-
 async function sendEmailNotification(data: NotificationJobData) {
     logger.info('Sending email notification', {
         userId: data.userId,
@@ -67,52 +66,36 @@ async function sendEmailNotification(data: NotificationJobData) {
     });
 
     const user = await prisma.user.findUnique({
-        where: {
-            id: data.userId,
-        },
+        where: { id: data.userId },
         select: { email: true }
     });
+
     if (!user) {
         logger.warn(`User not found for ID: ${data.userId}`);
         return;
     }
-    // Send the email using Resend
+
     await sendGenericEmail(
-        user.email,                                    // The user's email address
-        data.subject || 'FinWallet Notification',     // Subject (with fallback)
-        data.message                                   // The message content
+        user.email,
+        data.subject || 'FinWallet Notification',
+        data.message
     );
 
     logger.info(`Email sent successfully to ${user.email}`);
-
-
 }
 
-/**
- * Send SMS notification
- * Integrate with SMS provider (Twilio, etc.)
- */
+// sms - integrate with twilio etc
 async function sendSmsNotification(data: NotificationJobData) {
-    logger.info('Sending SMS notification', {
-        userId: data.userId,
-    });
-
-
+    logger.info('Sending SMS notification', { userId: data.userId });
+    // TODO: add twilio integration
 }
 
-/**
- * Send push notification 
- * Integrate with push provider (Firebase, etc.)
- */
+// push - integrate with firebase etc
 async function sendPushNotification(data: NotificationJobData) {
-    logger.info('Sending push notification', {
-        userId: data.userId,
-    });
-
-
+    logger.info('Sending push notification', { userId: data.userId });
+    // TODO: add firebase integration
 }
 
-// Worker event handlers
 notificationWorker.on('completed', (job) => {
     logger.info(`Notification job ${job.id} completed`);
 });

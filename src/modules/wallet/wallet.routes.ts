@@ -7,10 +7,10 @@ const walletController = new WalletController();
 
 router.use(authenticate); // All wallet routes require authentication
 
-router.post('/', walletController.createWallet);
-router.get('/', walletController.getUserWallets);
-router.get('/:walletId', walletController.getWallet);
-router.get('/:walletId/balance', walletController.getBalance);
-router.get('/:walletId/transactions', walletController.getTransactions);
+router.post('/', (req, res, next) => walletController.createWallet(req, res, next));
+router.get('/', (req, res, next) => walletController.getUserWallets(req, res, next));
+router.get('/:walletId', (req, res, next) => walletController.getWallet(req, res, next));
+router.get('/:walletId/balance', (req, res, next) => walletController.getBalance(req, res, next));
+router.get('/:walletId/transactions', (req, res, next) => walletController.getTransactions(req, res, next));
 
 export default router;

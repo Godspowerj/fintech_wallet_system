@@ -5,7 +5,7 @@ export const createWalletSchema = z.object({
         currency: z.string()
             .length(3, 'Currency must be a 3-letter code')
             .toUpperCase()
-            .default('USD'),
+            .default('NGN'),
     }),
 });
 

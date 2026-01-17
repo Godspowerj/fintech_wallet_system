@@ -1,30 +1,19 @@
-/**
- * =============================================================================
- * PAYSTACK CONFIGURATION
- * =============================================================================
- * 
- * Paystack is a payment gateway for Africa.
- * We use it to:
- * 1. Accept payments (user adds money to wallet)
- * 2. Send payouts (user withdraws to bank)
- * 
- * Get your keys from: https://dashboard.paystack.com/settings/developers
+/*
+ * Paystack integration - handles payments
+ * Docs: https://paystack.com/docs/api
  */
 
 import * as crypto from 'crypto';
 import { env } from './environment';
 import { logger } from '../utils/logger';
 
-// Paystack API base URL
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
-// Headers required for all Paystack requests
 const getHeaders = () => ({
     'Authorization': `Bearer ${env.PAYSTACK_SECRET_KEY}`,
     'Content-Type': 'application/json',
 });
 
-// Type definitions for Paystack responses
 interface PaystackResponse {
     status: boolean;
     message: string;
@@ -32,15 +21,15 @@ interface PaystackResponse {
 }
 
 interface InitializeTransactionResponse {
-    authorization_url: string;  // URL to redirect user to
+    authorization_url: string;
     access_code: string;
     reference: string;
 }
 
 interface VerifyTransactionResponse {
-    status: string;  // 'success', 'failed', 'abandoned'
+    status: string;
     reference: string;
-    amount: number;  // in kobo
+    amount: number;
     currency: string;
     customer: {
         email: string;
@@ -48,42 +37,29 @@ interface VerifyTransactionResponse {
     metadata?: Record<string, any>;
 }
 
-/**
- * Initialize a payment transaction
- * This creates a checkout page for the user to pay
- * 
- * @param email - Customer's email
- * @param amount - Amount in KOBO (₦100 = 10000 kobo)
- * @param reference - Unique transaction reference
- * @param metadata - Extra data (like walletId, userId)
- * @returns authorization_url, reference, access_code
- * 
- * @example
- * const result = await initializeTransaction(
- *     'user@email.com',
- *     500000,  // ₦5000 in kobo
- *     'txn_abc123',
- *     { walletId: 'wallet_xyz', userId: 'user_123' }
- * );
- * // Redirect user to: result.authorization_url
+/*
+ * Start a payment - returns a checkout URL
+ * Amount should be in kobo (100 kobo = ₦1)
  */
 export async function initializeTransaction(
     email: string,
-    amount: number,  // in kobo!
+    amount: number,
     reference: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    currency: string = 'NGN'
 ): Promise<InitializeTransactionResponse> {
-    logger.info('Initializing Paystack transaction', { email, amount, reference });
+    logger.info('Initializing Paystack transaction', { email, amount, reference, currency });
 
     const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
             email,
-            amount,  // Must be in kobo (₦100 = 10000)
+            amount,
             reference,
             metadata,
-            callback_url: env.PAYSTACK_CALLBACK_URL,  // Where to redirect after payment
+            currency,
+            // callback_url removed - no frontend redirect needed
         }),
     });
 
@@ -98,18 +74,8 @@ export async function initializeTransaction(
     return data.data as InitializeTransactionResponse;
 }
 
-/**
- * Verify a payment transaction
- * Call this to confirm if payment was successful
- * 
- * @param reference - The transaction reference
- * @returns Transaction details including status, amount, customer info
- * 
- * @example
- * const result = await verifyTransaction('txn_abc123');
- * if (result.status === 'success') {
- *     // Payment successful! Credit the wallet
- * }
+/*
+ * Check if a payment went through
  */
 export async function verifyTransaction(reference: string): Promise<VerifyTransactionResponse> {
     logger.info('Verifying Paystack transaction', { reference });
@@ -130,23 +96,12 @@ export async function verifyTransaction(reference: string): Promise<VerifyTransa
     return data.data as VerifyTransactionResponse;
 }
 
-/**
- * Validate Paystack webhook signature
- * Paystack signs webhooks with a secret - we verify it matches
- * This prevents fake webhook calls from hackers
- * 
- * @param payload - The raw request body (as string)
- * @param signature - The x-paystack-signature header
- * @returns true if valid, false if not
- * 
- * @example
- * if (validateWebhook(req.body, req.headers['x-paystack-signature'])) {
- *     // Webhook is legitimate, process it
- * }
+/*
+ * Validate webhook signature - checks if the webhook is legit
  */
 export function validateWebhook(payload: string, signature: string): boolean {
     if (!env.PAYSTACK_SECRET_KEY) {
-        logger.error('PAYSTACK_SECRET_KEY not configured');
+        logger.error('PAYSTACK_SECRET_KEY not set');
         return false;
     }
 
@@ -164,27 +119,19 @@ export function validateWebhook(payload: string, signature: string): boolean {
     return isValid;
 }
 
-/**
- * Generate a unique transaction reference
- * Format: FINWALLET_timestamp_randomstring
- */
+// generate unique reference for each transaction
 export function generateReference(): string {
     const timestamp = Date.now();
     const random = crypto.randomBytes(8).toString('hex');
     return `FINWALLET_${timestamp}_${random}`;
 }
 
-/**
- * Convert Naira to Kobo
- * Paystack accepts amounts in kobo (100 kobo = ₦1)
- */
+// convert naira to kobo (₦1 = 100 kobo)
 export function nairaToKobo(naira: number): number {
     return Math.round(naira * 100);
 }
 
-/**
- * Convert Kobo to Naira
- */
+// convert kobo to naira
 export function koboToNaira(kobo: number): number {
     return kobo / 100;
 }

@@ -1,203 +1,120 @@
-# 📚 Learning Guide for Fintech Wallet API
+# Learning Guide for Fintech Wallet API
 
-Welcome! This guide will help you understand how this codebase works, even if you're new to backend development.
-
----
-
-## 🗺️ Project Overview
-
-This is a **digital wallet API** - the backend for apps like PayPal, Venmo, or banking apps.
-
-### What it does:
-- 👤 **Users** can register, login, and manage their profile
-- 💰 **Wallets** hold virtual money (like a bank account)
-- 💸 **Transactions** move money between wallets
-- 🔒 **Fraud Detection** catches suspicious activity
-- 👑 **Admin** dashboard for managing users
+A practical guide to understanding this codebase.
 
 ---
 
-## 📁 Folder Structure Explained
+## What is this?
+
+A **digital wallet API** - the backend for apps like PayPal, Cash App, or banking apps.
+
+**Features:**
+- 👤 User registration & login
+- 💰 Wallet management
+- 💸 Money transfers
+- 🔒 Fraud detection
+- 💳 Paystack payments
+- 👑 Admin dashboard
+
+> For system architecture diagrams, see [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md)
+
+---
+
+## Folder Structure
 
 ```
 src/
-├── config/           🔧 Configuration files
-│   ├── database.ts   → Connects to PostgreSQL
-│   ├── redis.ts      → Connects to Redis (caching)
-│   └── environment.ts → Loads .env variables
-│
-├── middleware/       🚧 Code that runs before routes
-│   ├── auth.middleware.ts      → Checks if user is logged in
-│   ├── validation.middleware.ts → Validates request data
-│   ├── errorHandler.middleware.ts → Catches errors
-│   └── rateLimit.middleware.ts → Prevents spam
-│
-├── modules/          📦 Feature modules (main code!)
-│   ├── auth/         → Login, register, logout
-│   ├── wallet/       → Create/manage wallets
-│   ├── transaction/  → Transfer money
-│   ├── fraud/        → Detect suspicious activity
-│   └── admin/        → Admin-only features
-│
-├── utils/            🛠️ Helper functions
-│   ├── errors.ts     → Custom error classes
-│   ├── jwt.ts        → Token generation
-│   ├── helpers.ts    → Misc utilities
-│   └── logger.ts     → Logging utility
-│
-├── types/            📝 TypeScript type definitions
-├── workers/          ⚙️ Background job processors
-├── app.ts            🚀 Express app setup
-└── server.ts         🎬 Entry point
+├── config/           # database, redis, env config
+├── middleware/       # auth, validation, rate limiting
+├── modules/          # main features (auth, wallet, transaction, etc)
+├── utils/            # helpers, errors, jwt, email
+├── workers/          # background job processors
+├── queues/           # job queues
+├── types/            # typescript types
+├── app.ts            # express setup
+└── server.ts         # entry point
 ```
 
 ---
 
-## 🔄 Request Flow
-
-When someone calls your API, this is what happens:
+## How a Request Works
 
 ```
-1. Client sends request
-   ↓
-   POST /api/auth/login
-   { email: "user@example.com", password: "123" }
-   
-2. Express receives it
-   ↓
-   app.ts routes it to /api/auth/*
-   
-3. Middleware runs
-   ↓
-   → Rate limiter checks if too many requests
-   → Body parser converts JSON to object
-   → Validation checks if data is correct
-   
-4. Route handler
-   ↓
-   auth.routes.ts matches /login
-   
-5. Controller
-   ↓
-   auth.controller.ts receives the request
-   Extracts data, calls service
-   
-6. Service
-   ↓
-   auth.service.ts does the actual work
-   → Finds user in database
-   → Checks password
-   → Creates tokens
-   
-7. Response
-   ↓
-   Controller sends response back
-   { user: {...}, accessToken: "..." }
+POST /api/auth/login
+         │
+         ▼
+    [Middleware]
+    Rate limit → Parse body → Validate data
+         │
+         ▼
+    [auth.routes.ts]
+    Matches /login endpoint
+         │
+         ▼
+    [auth.controller.ts]
+    Gets email/password from req.body
+         │
+         ▼
+    [auth.service.ts]
+    Checks password, creates tokens
+         │
+         ▼
+    Response: { user, accessToken, refreshToken }
 ```
 
 ---
 
-## 🔑 Key Concepts
+## Key Concepts
 
-### 1. Controllers vs Services
+### Controllers vs Services
 
 | Controllers | Services |
 |-------------|----------|
-| Handle HTTP requests | Handle business logic |
-| Extract data from req | Talk to database |
-| Send responses | No knowledge of HTTP |
-| Thin - just routing | Fat - all the logic |
+| Handle HTTP | Handle logic |
+| req/res | Database ops |
+| Thin | Fat |
 
-**Why separate?** Services can be reused by controllers, background jobs, tests, etc.
+### Middleware
 
-### 2. Middleware
-
-Middleware are functions that run BEFORE your route:
+Functions that run before your route:
 
 ```typescript
-// Without middleware
-router.post('/transfer', transferController);
-
-// With middleware
-router.post('/transfer', 
-  authenticate,    // Check if logged in
-  validateBody,    // Check if data is valid
-  rateLimiter,     // Check if not spamming
-  transferController
+router.post('/transfer',
+  authenticate,   // check jwt
+  validate,       // check body
+  controller
 );
 ```
 
-### 3. JWT Authentication
+### JWT Auth
 
 ```
-Login Flow:
-1. User sends email/password
-2. Server creates JWT token (like a digital ID)
-3. Client stores token
-4. Client sends token with every request
-5. Server verifies token to identify user
-```
-
-### 4. Environment Variables
-
-Secrets and config stored in `.env` file:
-
-```bash
-DATABASE_URL="postgresql://..."  # Where's the database?
-JWT_SECRET="super-secret-key"    # Key to sign tokens
-PORT=3000                        # Which port to run on?
+1. User logs in → gets token
+2. User sends token with requests
+3. Server verifies token
 ```
 
 ---
 
-## 🛠️ Common Patterns in This Codebase
-
-### Pattern 1: Try-Catch with Next
+## Database Patterns
 
 ```typescript
-async function handler(req, res, next) {
-  try {
-    // Do something that might fail
-    const result = await doSomething();
-    res.json({ success: true, data: result });
-  } catch (error) {
-    // Pass error to error handler middleware
-    next(error);
-  }
-}
-```
-
-### Pattern 2: Custom Errors
-
-```typescript
-// Instead of:
-throw new Error('User not found');
-
-// We do:
-throw new NotFoundError('User not found');
-// This automatically returns 404 status code
-```
-
-### Pattern 3: Prisma Queries
-
-```typescript
-// Find one user
+// find one
 const user = await prisma.user.findUnique({
   where: { email: 'john@example.com' }
 });
 
-// Find many with conditions
+// find many
 const users = await prisma.user.findMany({
-  where: { role: 'ADMIN' },
-  orderBy: { createdAt: 'desc' }
+  where: { role: 'ADMIN' }
 });
 
-// Create a record
+// create
 const wallet = await prisma.wallet.create({
-  data: { userId: user.id, currency: 'USD' }
+  data: { userId, currency: 'NGN' }
 });
 
-// Update a record
+// update
 await prisma.user.update({
   where: { id: userId },
   data: { lastLoginAt: new Date() }
@@ -206,86 +123,81 @@ await prisma.user.update({
 
 ---
 
-## 🧪 How to Test the API
+## Error Handling
 
-### 1. Use Swagger UI (Easiest)
-Open http://localhost:3000/api-docs in your browser
-
-### 2. Use curl (Terminal)
-```bash
-# Register
-curl -X POST http://localhost:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123","firstName":"John","lastName":"Doe"}'
-
-# Login
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+```typescript
+// custom errors auto-set status codes
+throw new NotFoundError('User not found');     // 404
+throw new UnauthorizedError('Invalid token');  // 401
+throw new BadRequestError('Invalid amount');   // 400
 ```
 
-### 3. Use Postman or Insomnia (GUI tools)
+---
+
+## Testing the API
+
+### Swagger (easiest)
+Open http://localhost:3000/api-docs
+
+### Postman
+
+**Register:**
+```
+POST http://localhost:3000/api/auth/register
+{
+  "email": "test@example.com",
+  "password": "Password123",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+```
+
+**Login:**
+```
+POST http://localhost:3000/api/auth/login
+{
+  "email": "test@example.com",
+  "password": "Password123"
+}
+```
+
+**Use token:**
+```
+Authorization: Bearer <your-access-token>
+```
 
 ---
 
-## 📖 Suggested Learning Path
+## Learning Path
 
-1. **Start Here:**
-   - `server.ts` - How the app starts
-   - `app.ts` - How Express is configured
-
-2. **Understand Auth:**
-   - `auth.routes.ts` - The endpoints
-   - `auth.controller.ts` - Request handling
-   - `auth.service.ts` - Business logic
-
-3. **Learn Middleware:**
-   - `auth.middleware.ts` - How login is checked
-   - `errorHandler.middleware.ts` - How errors are caught
-
-4. **Study Services:**
-   - `wallet.service.ts` - Simple CRUD operations
-   - `transaction.service.ts` - Complex business logic
-
-5. **Advanced:**
-   - `redis.ts` - Caching and rate limiting
-   - `fraud.service.ts` - Business rules
-   - Background workers
+1. **Start:** `server.ts` → `app.ts`
+2. **Auth:** `auth.routes.ts` → `auth.controller.ts` → `auth.service.ts`
+3. **Middleware:** `auth.middleware.ts`
+4. **Features:** `wallet.service.ts`, `transaction.service.ts`
+5. **Advanced:** `payment.service.ts`, `fraud.service.ts`
 
 ---
 
-## 🤔 Common Questions
+## Common Questions
 
-### Why use TypeScript?
-Catches errors before running. When you type `user.`, you get autocomplete for all user properties!
+**Why TypeScript?**
+Type safety, autocomplete, catch bugs early.
 
-### Why Prisma instead of raw SQL?
-Type safety, autocomplete, automatic migrations, and cleaner code.
+**Why Prisma?**
+Clean queries, type safety, auto migrations.
 
-### Why Redis?
-Fast in-memory storage. Used for:
-- Rate limiting (tracking request counts)
-- Caching (storing frequently accessed data)
-- Locking (preventing race conditions)
+**Why Redis?**
+Fast caching, rate limiting, job queues, wallet locks.
 
-### What are race conditions?
-When two things happen at the same time and conflict:
-- User has $100
-- Two $80 withdrawals happen simultaneously
-- Both check balance (see $100)
-- Both withdraw $80
-- Now user has -$60! 😱
-
-Redis locks prevent this.
+**Why separate services?**
+Reusable logic - controllers, workers, and tests can all use them.
 
 ---
 
-## 🚀 Next Steps
+## Related Docs
 
-1. **Read the commented code** - Start with server.ts and app.ts
-2. **Test the API** - Use Swagger at /api-docs
-3. **Make small changes** - Add a new field, new endpoint
-4. **Break it on purpose** - Remove things and see what errors you get
-5. **Build something similar** - The best way to learn!
+- [System Architecture](./SYSTEM_ARCHITECTURE.md) - Diagrams & data flows
+- [README](./README.md) - Setup instructions
+- [API Docs](http://localhost:3000/api-docs) - Swagger UI
 
-Happy coding! 🎉
+Happy coding! 🚀

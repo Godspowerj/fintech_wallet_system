@@ -1,3 +1,8 @@
+# Docker Compose - Database Services Only
+# Run: docker-compose up -d
+# Stop: docker-compose down
+# Reset: docker-compose down -v && docker-compose up -d
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,11 +16,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fintech_user"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -25,32 +25,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: fintech_api
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://fintech_user:fintech_password@postgres:5432/fintech_wallet
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src:/app/src
-      - ./prisma:/app/prisma
 
 volumes:
   postgres_data:

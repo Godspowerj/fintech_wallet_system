@@ -1,51 +1,26 @@
-/**
- * =============================================================================
- * NOTIFICATION QUEUE - The "Producer"
- * =============================================================================
- * 
- * This file is used to ADD jobs to the notification queue.
- * The notification WORKER (in /workers) will pick up these jobs and process them.
- * 
- * FLOW:
- * 1. Something happens in your app (e.g., user receives money)
- * 2. You call queueEmailNotification() with the message you want to send
- * 3. Job gets added to Redis queue
- * 4. Worker picks it up and sends the email
+/*
+ * Notification queue - adds email/sms jobs to Redis
+ * Worker picks these up and sends them
  */
 
 import { Queue } from 'bullmq';
-import { bullmqRedis } from '../config/redis';  // Use BullMQ-compatible Redis
+import { bullmqRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 
-// Create the queue (must use same name as worker: 'notifications')
 const notificationQueue = new Queue('notifications', {
     connection: bullmqRedis,
     defaultJobOptions: {
-        attempts: 3,              // Retry 3 times if it fails
+        attempts: 3,
         backoff: {
-            type: 'exponential',  // Wait longer between each retry
-            delay: 1000,          // Start with 1 second
+            type: 'exponential',
+            delay: 1000,
         },
-        removeOnComplete: 100,    // Keep last 100 completed jobs
-        removeOnFail: 50,         // Keep last 50 failed jobs
+        removeOnComplete: 100,
+        removeOnFail: 50,
     },
 });
 
-/**
- * Queue an EMAIL notification
- * 
- * @param userId - The user's ID (we'll look up their email)
- * @param subject - Email subject line (what you want it to say)
- * @param message - Email body (the content)
- * 
- * @example
- * // After a successful transfer:
- * await queueEmailNotification(
- *     recipientUserId,
- *     'Money Received! 💰',
- *     `You received $${amount} from ${senderName}`
- * );
- */
+// queue email notification
 export async function queueEmailNotification(
     userId: string,
     subject: string,
@@ -71,9 +46,7 @@ export async function queueEmailNotification(
     }
 }
 
-/**
- * Queue an SMS notification (for future use)
- */
+// queue sms notification (for future)
 export async function queueSmsNotification(
     userId: string,
     message: string
@@ -96,9 +69,7 @@ export async function queueSmsNotification(
     }
 }
 
-/**
- * Queue a PUSH notification (for future use)
- */
+// queue push notification (for future)
 export async function queuePushNotification(
     userId: string,
     subject: string,

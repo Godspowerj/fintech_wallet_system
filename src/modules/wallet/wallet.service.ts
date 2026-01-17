@@ -9,7 +9,7 @@ import {
 import { WalletStatus } from '@prisma/client';
 
 export class WalletService {
-  async createWallet(userId: string, currency: string = 'USD') {
+  async createWallet(userId: string, currency: string = 'NGN') {
     const wallet = await prisma.wallet.create({
       data: {
         userId,
@@ -53,7 +53,10 @@ export class WalletService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return wallets;
+    return wallets.map(wallet => ({
+      ...wallet,
+      balance: wallet.balance.toString(),
+    }));
   }
 
   async getWalletBalance(walletId: string, userId: string) {

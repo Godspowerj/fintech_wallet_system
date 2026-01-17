@@ -1,35 +1,5 @@
-/**
- * =============================================================================
- * AUTH.SERVICE.TS - AUTHENTICATION BUSINESS LOGIC
- * =============================================================================
- * 
- * WHAT IS A SERVICE?
- * Services contain the "business logic" - the actual work of your app.
- * 
- * Controller vs Service:
- * - Controller: Handles HTTP (receives request, sends response)
- * - Service: Does the actual work (database operations, calculations)
- * 
- * WHY SEPARATE THEM?
- * 1. Reusability: Services can be used by controllers, workers, tests
- * 2. Testing: Easier to test business logic without HTTP
- * 3. Clean code: Each file has one responsibility
- * 
- * AUTHENTICATION FLOW:
- * 
- * REGISTER:
- * 1. Check if email already exists
- * 2. Hash the password (never store plain passwords!)
- * 3. Create user in database
- * 4. Create a wallet for the user
- * 5. Return success (in production, send verification email)
- * 
- * LOGIN:
- * 1. Find user by email
- * 2. Compare password with stored hash
- * 3. Generate JWT tokens (access + refresh)
- * 4. Store refresh token in database
- * 5. Return tokens to client
+/*
+ * Auth service - handles login, register, password reset, etc.
  */
 
 import bcrypt from 'bcrypt';
@@ -52,42 +22,30 @@ import {
   BadRequestError,
 } from '../../utils/errors';
 import { UserRole } from '@prisma/client';
-import { sendPasswordResetEmail, sendVerificationEmail , sendWelcomeEmail } from '../../utils/email';
+import { sendPasswordResetEmail, sendVerificationEmail, sendWelcomeEmail } from '../../utils/email';
 
 export class AuthService {
-  /**
-   * REGISTER A NEW USER
-   * 
-   * @param data - User registration data (email, password, name)
-   * @returns The created user (without sensitive fields) and a message
-   */
+  // register new user
   async register(data: {
     email: string;
     password: string;
     firstName: string;
     lastName: string;
   }) {
-
-    // We use .toLowerCase() to make email comparison case-insensitive
+    // check if email already taken
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
     });
 
     if (existingUser) {
-      // 409 Conflict - resource already exists
       throw new ConflictError('User with this email already exists');
     }
 
-    // NEVER store plain text passwords! bcrypt creates a one-way hash.
-    // env.BCRYPT_ROUNDS controls how many times the hash is computed
-    // Higher = more secure but slower (12 is a good balance)
+    // hash password
     const passwordHash = await bcrypt.hash(data.password, env.BCRYPT_ROUNDS);
-
-    // Step 3: Generate email verification token
-    // This would be sent in a verification email link
     const emailVerifyToken = generateRandomToken();
 
-    // Step 4: Create the user in the database
+    // create user
     const user = await prisma.user.create({
       data: {
         email: data.email.toLowerCase(),
@@ -95,69 +53,50 @@ export class AuthService {
         firstName: data.firstName,
         lastName: data.lastName,
         emailVerifyToken,
-        role: UserRole.USER, // New users are regular users, not admins
+        role: UserRole.USER,
       },
     });
 
-    // Step 5: Create a default wallet for the user
-    // Every user needs at least one wallet to send/receive money
+    // create default wallet (NGN)
     await prisma.wallet.create({
       data: {
         userId: user.id,
-        currency: 'USD',
+        currency: 'NGN',
       },
     });
 
-    // In production, you would send a verification email here:
     await sendWelcomeEmail(user.email, user.firstName);
 
-
-    // Return the user (without password hash) and a success message
     return {
-      user: sanitizeUser(user), // Removes passwordHash and other sensitive fields
+      user: sanitizeUser(user),
       message: 'Registration successful. Please verify your email.',
     };
   }
 
-  /**
-   * LOGIN A USER
-   * 
-   * @param email - User's email
-   * @param password - User's password (plain text - will be compared to hash)
-   * @returns User info and JWT tokens
-   */
-  async login(data: {
-    email: string;
-    password: string;
-  }) {
-    // Step 1: Find the user by email
+  // login
+  async login(data: { email: string; password: string }) {
     const user = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
     });
 
-    // Security tip: Don't say "user not found" vs "wrong password"
-    // That would let attackers know which emails are registered!
+    // don't tell them if email exists or not (security)
     if (!user) {
       throw new UnauthorizedError('Invalid credentials');
     }
 
-    // Step 2: Verify password using bcrypt
-    // bcrypt.compare() hashes the input and compares it to the stored hash
     const isValidPassword = await bcrypt.compare(data.password, user.passwordHash);
 
     if (!isValidPassword) {
       throw new UnauthorizedError('Invalid credentials');
     }
 
-    // Step 3: Update last login timestamp
+    // update last login
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // Step 4: Generate JWT tokens
-    // Access token: Short-lived (15min), used for API requests
-    // Refresh token: Long-lived (7 days), used to get new access tokens
+    // generate tokens
     const payload: JwtPayload = {
       userId: user.id,
       email: user.email,
@@ -167,10 +106,9 @@ export class AuthService {
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
-    // Step 5: Store refresh token in database
-    // This allows us to invalidate it (logout) and track sessions
+    // save refresh token
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
     await prisma.refreshToken.create({
       data: {
@@ -180,7 +118,6 @@ export class AuthService {
       },
     });
 
-    // Return everything the client needs
     return {
       user: sanitizeUser(user),
       accessToken,
@@ -188,20 +125,10 @@ export class AuthService {
     };
   }
 
-  /**
-   * REFRESH ACCESS TOKEN
-   * 
-   * When the access token expires (after 15 min), the client uses
-   * the refresh token to get a new access token without re-logging in.
-   * 
-   * @param refreshToken - The refresh token from the previous login
-   * @returns New access token and refresh token
-   */
+  // get new tokens using refresh token
   async refreshToken(refreshToken: string) {
-    // Step 1: Verify the refresh token is valid (not expired, correct signature)
     const payload = verifyRefreshToken(refreshToken);
 
-    // Step 2: Check if token exists in database (hasn't been revoked)
     const storedToken = await prisma.refreshToken.findUnique({
       where: { token: refreshToken },
     });
@@ -210,7 +137,6 @@ export class AuthService {
       throw new UnauthorizedError('Invalid or expired refresh token');
     }
 
-    // Step 3: Get the user
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
     });
@@ -219,7 +145,6 @@ export class AuthService {
       throw new UnauthorizedError('User not found');
     }
 
-    // Step 4: Generate new tokens
     const newPayload: JwtPayload = {
       userId: user.id,
       email: user.email,
@@ -229,8 +154,7 @@ export class AuthService {
     const accessToken = generateAccessToken(newPayload);
     const newRefreshToken = generateRefreshToken(newPayload);
 
-    // Step 5: Rotate refresh token (delete old, create new)
-    // This is a security best practice - each refresh token is single-use
+    // rotate token (delete old, create new)
     await prisma.refreshToken.delete({
       where: { token: refreshToken },
     });
@@ -252,13 +176,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * LOGOUT
-   * 
-   * Deletes the refresh token from the database.
-   * The access token will still work until it expires,
-   * but the user can't refresh it anymore.
-   */
+  // logout - just delete the refresh token
   async logout(refreshToken: string) {
     await prisma.refreshToken.deleteMany({
       where: { token: refreshToken },
@@ -267,13 +185,7 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-
-  /**
-   * VERIFY EMAIL
-   * 
-   * When user clicks the link in verification email,
-   * this marks their email as verified.
-   */
+  // verify email
   async verifyEmail(token: string) {
     const user = await prisma.user.findFirst({
       where: { emailVerifyToken: token },
@@ -287,7 +199,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         isEmailVerified: true,
-        emailVerifyToken: null, // Clear the token so it can't be reused
+        emailVerifyToken: null,
       },
     });
 
@@ -296,25 +208,20 @@ export class AuthService {
     return { message: 'Email verified successfully' };
   }
 
-  /**
-   * FORGOT PASSWORD
-   * 
-   * User requests a password reset. We generate a token
-   * and would email it to them (in production).
-   */
+  // forgot password - send reset link
   async forgotPassword(email: string) {
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
 
-    // Security: Don't reveal if email exists or not
+    // don't reveal if email exists
     if (!user) {
       return { message: 'If the email exists, a reset link has been sent' };
     }
 
     const resetToken = generateRandomToken();
     const resetExpiry = new Date();
-    resetExpiry.setHours(resetExpiry.getHours() + 1); // Token valid for 1 hour
+    resetExpiry.setHours(resetExpiry.getHours() + 1);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -324,22 +231,17 @@ export class AuthService {
       },
     });
 
-     await sendPasswordResetEmail(user.email, resetToken);
+    await sendPasswordResetEmail(user.email, resetToken);
 
     return { message: 'If the email exists, a reset link has been sent' };
   }
 
-  /**
-   * RESET PASSWORD
-   * 
-   * User clicks the reset link and provides a new password.
-   */
+  // reset password with token
   async resetPassword(token: string, newPassword: string) {
-    // Find user with valid (non-expired) reset token
     const user = await prisma.user.findFirst({
       where: {
         resetPasswordToken: token,
-        resetPasswordExpiry: { gt: new Date() }, // gt = greater than (not expired)
+        resetPasswordExpiry: { gt: new Date() },
       },
     });
 
@@ -347,10 +249,8 @@ export class AuthService {
       throw new BadRequestError('Invalid or expired reset token');
     }
 
-    // Hash the new password
     const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
 
-    // Update password and clear reset token
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -360,7 +260,7 @@ export class AuthService {
       },
     });
 
-    // Security: Delete all refresh tokens so user must login again everywhere
+    // force logout everywhere
     await prisma.refreshToken.deleteMany({
       where: { userId: user.id },
     });
@@ -368,16 +268,12 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-  /**
-   * GET USER PROFILE
-   * 
-   * Returns the current user's information including their wallets.
-   */
+  // get user profile
   async getProfile(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        wallets: true, // Include related wallets in the response
+        wallets: true,
       },
     });
 
@@ -388,5 +284,3 @@ export class AuthService {
     return sanitizeUser(user);
   }
 }
-
-

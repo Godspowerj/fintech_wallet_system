@@ -1,3 +1,7 @@
+/*
+ * Transaction service - handles transfers, deposits, withdrawals
+ */
+
 import { prisma } from '../../config/database';
 import { redis } from '../../config/redis';
 import { WalletService } from '../wallet/wallet.service';
@@ -22,40 +26,37 @@ export class TransactionService {
     idempotencyKey: string;
     userId: string;
   }) {
-    // Check idempotency
+    // check if we already processed this
     const existing = await this.checkIdempotency(data.idempotencyKey);
     if (existing) return existing;
 
-    // Validate amount
     if (data.amount <= 0) {
       throw new BadRequestError('Amount must be greater than zero');
     }
 
-    // Check sender owns wallet
+    // verify sender owns wallet
     const senderWallet = await walletService.getWalletById(
       data.senderWalletId,
       data.userId
     );
 
-    // Check wallets are different
     if (data.senderWalletId === data.receiverWalletId) {
       throw new BadRequestError('Cannot transfer to the same wallet');
     }
 
-    // Check receiver wallet exists
     const receiverWallet = await walletService.getWalletById(data.receiverWalletId);
 
-    // Check wallet status
+    // make sure both wallets are active
     await walletService.checkWalletStatus(data.senderWalletId);
     await walletService.checkWalletStatus(data.receiverWalletId);
 
-    // Lock both wallets (alphabetically to prevent deadlock)
+    // lock wallets to prevent race conditions (sorted to avoid deadlock)
     const [firstId, secondId] = [data.senderWalletId, data.receiverWalletId].sort();
     const lock1 = await walletService.lockWallet(firstId, 15000);
     const lock2 = await walletService.lockWallet(secondId, 15000);
 
     try {
-      // Create pending transaction
+      // create pending transaction
       const transaction = await prisma.transaction.create({
         data: {
           transactionType: TransactionType.TRANSFER,
@@ -71,7 +72,7 @@ export class TransactionService {
         },
       });
 
-      // Run fraud check
+      // run fraud check
       const fraudCheck = await fraudService.checkTransaction({
         transactionId: transaction.id,
         userId: data.userId,
@@ -96,7 +97,7 @@ export class TransactionService {
         throw new BadRequestError(fraudCheck.reason || 'Transaction flagged for fraud');
       }
 
-      // Check balance
+      // check balance
       if (senderWallet.balance.lt(data.amount)) {
         await prisma.transaction.update({
           where: { id: transaction.id },
@@ -114,16 +115,14 @@ export class TransactionService {
         throw new InsufficientFundsError();
       }
 
-      // Update transaction to processing
       await prisma.transaction.update({
         where: { id: transaction.id },
         data: { status: TransactionStatus.PROCESSING },
       });
 
-      // Execute transfer with ledger entries
+      // do the actual transfer
       await this.executeTransfer(transaction.id, senderWallet, receiverWallet, data.amount);
 
-      // Get final transaction
       const completedTransaction = await prisma.transaction.findUnique({
         where: { id: transaction.id },
         include: {
@@ -151,26 +150,20 @@ export class TransactionService {
         data: completedTransaction,
       });
 
-      // ========================================
-      // QUEUE EMAIL NOTIFICATIONS
-      // This is where YOU write the subject and message!
-      // ========================================
-
-      // Notify the SENDER that money was sent
+      // send emails
       if (completedTransaction?.sender) {
         await queueEmailNotification(
-          completedTransaction.sender.id,                           // userId
-          'Transfer Successful ✅',                                  // subject - YOU write this!
-          `You successfully sent $${data.amount} to ${completedTransaction.receiver?.firstName || 'recipient'}.`  // message - YOU write this!
+          completedTransaction.sender.id,
+          'Transfer Successful ✅',
+          `You successfully sent ₦${data.amount} to ${completedTransaction.receiver?.firstName || 'recipient'}.`
         );
       }
 
-      // Notify the RECEIVER that money was received
       if (completedTransaction?.receiver) {
         await queueEmailNotification(
-          completedTransaction.receiver.id,                         // userId
-          'Money Received! 💰',                                      // subject - YOU write this!
-          `You received $${data.amount} from ${completedTransaction.sender?.firstName || 'someone'}.`  // message - YOU write this!
+          completedTransaction.receiver.id,
+          'Money Received! 💰',
+          `You received ₦${data.amount} from ${completedTransaction.sender?.firstName || 'someone'}.`
         );
       }
 
@@ -188,7 +181,6 @@ export class TransactionService {
     idempotencyKey: string;
     userId: string;
   }) {
-    // Check idempotency
     const existing = await this.checkIdempotency(data.idempotencyKey);
     if (existing) return existing;
 
@@ -216,7 +208,6 @@ export class TransactionService {
         },
       });
 
-      // Create ledger entry and update balance
       const balanceBefore = wallet.balance;
       const balanceAfter = balanceBefore.add(data.amount);
 
@@ -270,7 +261,6 @@ export class TransactionService {
     idempotencyKey: string;
     userId: string;
   }) {
-    // Check idempotency
     const existing = await this.checkIdempotency(data.idempotencyKey);
     if (existing) return existing;
 
@@ -360,7 +350,7 @@ export class TransactionService {
     const receiverBalanceAfter = receiverBalanceBefore.add(amount);
 
     await prisma.$transaction([
-      // Debit sender
+      // debit sender
       prisma.ledgerEntry.create({
         data: {
           walletId: senderWallet.id,
@@ -376,7 +366,7 @@ export class TransactionService {
         where: { id: senderWallet.id },
         data: { balance: senderBalanceAfter },
       }),
-      // Credit receiver
+      // credit receiver
       prisma.ledgerEntry.create({
         data: {
           walletId: receiverWallet.id,
@@ -392,7 +382,7 @@ export class TransactionService {
         where: { id: receiverWallet.id },
         data: { balance: receiverBalanceAfter },
       }),
-      // Update transaction
+      // mark complete
       prisma.transaction.update({
         where: { id: transactionId },
         data: {
@@ -438,11 +428,9 @@ export class TransactionService {
   private async checkIdempotency(key: string) {
     const cacheKey = `idempotency:${key}`;
     const cached = await redis.get(cacheKey);
-
     if (cached) {
       return JSON.parse(cached);
     }
-
     return null;
   }
 

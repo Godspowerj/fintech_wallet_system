@@ -44,7 +44,7 @@ const authController = new AuthController();
  *       201:
  *         description: User registered successfully
  */
-router.post('/register', validate(registerSchema), authController.register);
+router.post('/register', validate(registerSchema), (req, res, next) => authController.register(req, res, next));
 
 /**
  * @swagger
@@ -70,7 +70,7 @@ router.post('/register', validate(registerSchema), authController.register);
  *       200:
  *         description: Login successful
  */
-router.post('/login', validate(loginSchema), authController.login);
+router.post('/login', validate(loginSchema), (req, res, next) => authController.login(req, res, next));
 
 /**
  * @swagger
@@ -79,7 +79,7 @@ router.post('/login', validate(loginSchema), authController.login);
  *     summary: Refresh access token
  *     tags: [Auth]
  */
-router.post('/refresh', validate(refreshTokenSchema), authController.refreshToken);
+router.post('/refresh', validate(refreshTokenSchema), (req, res, next) => authController.refreshToken(req, res, next));
 
 /**
  * @swagger
@@ -88,7 +88,7 @@ router.post('/refresh', validate(refreshTokenSchema), authController.refreshToke
  *     summary: Logout user
  *     tags: [Auth]
  */
-router.post('/logout', validate(refreshTokenSchema), authController.logout);
+router.post('/logout', validate(refreshTokenSchema), (req, res, next) => authController.logout(req, res, next));
 
 /**
  * @swagger
@@ -97,7 +97,7 @@ router.post('/logout', validate(refreshTokenSchema), authController.logout);
  *     summary: Verify email address
  *     tags: [Auth]
  */
-router.post('/verify-email', validate(verifyEmailSchema), authController.verifyEmail);
+router.post('/verify-email', validate(verifyEmailSchema), (req, res, next) => authController.verifyEmail(req, res, next));
 
 /**
  * @swagger
@@ -106,7 +106,7 @@ router.post('/verify-email', validate(verifyEmailSchema), authController.verifyE
  *     summary: Request password reset
  *     tags: [Auth]
  */
-router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
+router.post('/forgot-password', validate(forgotPasswordSchema), (req, res, next) => authController.forgotPassword(req, res, next));
 
 /**
  * @swagger
@@ -115,7 +115,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), authController.f
  *     summary: Reset password
  *     tags: [Auth]
  */
-router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
+router.post('/reset-password', validate(resetPasswordSchema), (req, res, next) => authController.resetPassword(req, res, next));
 
 /**
  * @swagger
@@ -126,6 +126,6 @@ router.post('/reset-password', validate(resetPasswordSchema), authController.res
  *     security:
  *       - bearerAuth: []
  */
-router.get('/profile', authenticate, authController.getProfile);
+router.get('/profile', authenticate, (req, res, next) => authController.getProfile(req, res, next));
 
 export default router;

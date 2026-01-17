@@ -92,7 +92,7 @@ model RefreshToken {
 model Wallet {
   id        String       @id @default(uuid())
   userId    String
-  currency  String       @default("USD")
+  currency  String       @default("NGN")
   balance   Decimal      @default(0) @db.Decimal(19, 4)
   status    WalletStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
@@ -112,7 +112,7 @@ model Transaction {
   id              String            @id @default(uuid())
   transactionType TransactionType
   amount          Decimal           @db.Decimal(19, 4)
-  currency        String            @default("USD")
+  currency        String            @default("NGN")
   status          TransactionStatus @default(PENDING)
   description     String?
   metadata        Json?

@@ -1,23 +1,9 @@
-/**
- * =============================================================================
- * PAYMENT SERVICE
- * =============================================================================
+/*
+ * Payment service - handles wallet funding via Paystack
  * 
- * This service handles:
- * 1. Initiating wallet funding (user wants to add money)
- * 2. Processing Paystack webhooks (payment confirmed)
- * 3. Handling payment verification
- * 
- * FLOW:
- * 
- * 1. User clicks "Add Money" → initializeFunding()
- *    → Creates pending transaction
- *    → Returns Paystack checkout URL
- * 
- * 2. User pays on Paystack → Paystack sends webhook → handleWebhook()
- *    → Verifies webhook signature
- *    → Credits wallet balance
- *    → Updates transaction to COMPLETED
+ * Flow:
+ * 1. User clicks "Add Money" -> creates pending transaction, returns checkout URL
+ * 2. User pays -> Paystack webhook -> credits wallet, marks complete
  */
 
 import { prisma } from '../../config/database';
@@ -35,25 +21,15 @@ import { logger } from '../../utils/logger';
 import { queueEmailNotification } from '../../queues/notification.queue';
 
 export class PaymentService {
-    /**
-     * Initialize wallet funding
-     * 
-     * Creates a pending transaction and returns Paystack checkout URL
-     * 
-     * @param userId - The user's ID
-     * @param walletId - Which wallet to credit
-     * @param amount - Amount in Naira (we convert to kobo)
-     * @returns Paystack authorization URL to redirect user to
-     */
+    // start wallet funding - returns paystack checkout URL
     async initializeFunding(userId: string, walletId: string, amount: number) {
         logger.info('Initializing wallet funding', { userId, walletId, amount });
 
-        // Validate amount
         if (amount <= 0) {
             throw new BadRequestError('Amount must be greater than zero');
         }
 
-        // Get user email (required by Paystack)
+        // get user email for paystack
         const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { email: true, firstName: true },
@@ -63,7 +39,7 @@ export class PaymentService {
             throw new NotFoundError('User not found');
         }
 
-        // Verify wallet exists and belongs to user
+        // check wallet exists and belongs to user
         const wallet = await prisma.wallet.findUnique({
             where: { id: walletId },
         });
@@ -72,35 +48,34 @@ export class PaymentService {
             throw new NotFoundError('Wallet not found');
         }
 
-        // Generate unique reference
         const reference = generateReference();
 
-        // Create PENDING transaction in our database
-        // This will be updated to COMPLETED when Paystack confirms payment
+        // create pending transaction
         const transaction = await prisma.transaction.create({
             data: {
                 transactionType: TransactionType.DEPOSIT,
                 amount: amount,
                 currency: wallet.currency,
-                status: TransactionStatus.PENDING,  // Will change to COMPLETED after payment
+                status: TransactionStatus.PENDING,
                 receiverId: userId,
                 receiverWalletId: walletId,
                 description: 'Wallet funding via Paystack',
-                externalReference: reference,  // Link to Paystack transaction
+                externalReference: reference,
             },
         });
 
-        // Initialize Paystack transaction
+        // init paystack transaction
         const paystackResult = await initializeTransaction(
             user.email,
-            nairaToKobo(amount),  // Convert to kobo
+            nairaToKobo(amount),
             reference,
             {
                 userId,
                 walletId,
                 transactionId: transaction.id,
                 type: 'wallet_funding',
-            }
+            },
+            'NGN'
         );
 
         logger.info('Wallet funding initialized', {
@@ -117,18 +92,10 @@ export class PaymentService {
         };
     }
 
-    /**
-     * Handle Paystack webhook
-     * 
-     * Called when Paystack sends a notification about a payment
-     * 
-     * @param payload - Raw request body
-     * @param signature - x-paystack-signature header
-     */
+    // handle paystack webhook
     async handleWebhook(payload: string, signature: string) {
         logger.info('Processing Paystack webhook');
 
-        // Validate webhook signature
         if (!validateWebhook(payload, signature)) {
             logger.error('Invalid webhook signature');
             throw new BadRequestError('Invalid webhook signature');
@@ -137,7 +104,6 @@ export class PaymentService {
         const event = JSON.parse(payload);
         logger.info('Webhook event received', { event: event.event });
 
-        // Handle different event types
         switch (event.event) {
             case 'charge.success':
                 await this.handleChargeSuccess(event.data);
@@ -150,9 +116,7 @@ export class PaymentService {
         }
     }
 
-    /**
-     * Handle successful payment
-     */
+    // payment successful - credit wallet
     private async handleChargeSuccess(data: any) {
         const reference = data.reference;
         const amountInKobo = data.amount;
@@ -160,7 +124,6 @@ export class PaymentService {
 
         logger.info('Processing successful charge', { reference, amountInNaira });
 
-        // Find our transaction by the reference
         const transaction = await prisma.transaction.findFirst({
             where: { externalReference: reference },
             include: {
@@ -171,22 +134,21 @@ export class PaymentService {
 
         if (!transaction) {
             logger.error('Transaction not found for reference', { reference });
-            return;  // Don't throw - webhook would retry forever
+            return;
         }
 
-        // Check if already processed (idempotency)
+        // already processed? skip
         if (transaction.status === TransactionStatus.COMPLETED) {
             logger.info('Transaction already processed', { reference });
             return;
         }
 
-        // Update wallet balance and transaction status
         const wallet = transaction.receiverWallet!;
         const balanceBefore = wallet.balance;
         const balanceAfter = balanceBefore.add(amountInNaira);
 
         await prisma.$transaction([
-            // Create ledger entry
+            // create ledger entry
             prisma.ledgerEntry.create({
                 data: {
                     walletId: wallet.id,
@@ -198,12 +160,12 @@ export class PaymentService {
                     description: 'Wallet funding via Paystack',
                 },
             }),
-            // Update wallet balance
+            // update wallet balance
             prisma.wallet.update({
                 where: { id: wallet.id },
                 data: { balance: balanceAfter },
             }),
-            // Update transaction status
+            // mark transaction complete
             prisma.transaction.update({
                 where: { id: transaction.id },
                 data: {
@@ -219,7 +181,7 @@ export class PaymentService {
             newBalance: balanceAfter.toString(),
         });
 
-        // Send notification email
+        // send email
         if (transaction.receiver) {
             await queueEmailNotification(
                 transaction.receiver.id,
@@ -229,15 +191,12 @@ export class PaymentService {
         }
     }
 
-    /**
-     * Handle failed payment
-     */
+    // payment failed
     private async handleChargeFailed(data: any) {
         const reference = data.reference;
 
         logger.info('Processing failed charge', { reference });
 
-        // Find and update our transaction
         const transaction = await prisma.transaction.findFirst({
             where: { externalReference: reference },
         });
@@ -258,19 +217,12 @@ export class PaymentService {
         logger.info('Transaction marked as failed', { reference });
     }
 
-    /**
-     * Verify payment status
-     * 
-     * Called when user returns from Paystack checkout
-     * to check if payment was successful
-     */
+    // verify payment status (for when user returns from paystack)
     async verifyPayment(reference: string) {
         logger.info('Verifying payment', { reference });
 
-        // Verify with Paystack
         const paystackResult = await verifyTransaction(reference);
 
-        // Find our transaction
         const transaction = await prisma.transaction.findFirst({
             where: { externalReference: reference },
             include: {
@@ -282,6 +234,24 @@ export class PaymentService {
             throw new NotFoundError('Transaction not found');
         }
 
+        // if paystack says success but we're still pending, auto-complete
+        if (paystackResult.status === 'success' && transaction.status === TransactionStatus.PENDING) {
+            logger.info('Payment verified as success but still PENDING. Auto-completing...', { reference });
+
+            await this.handleChargeSuccess({
+                reference: paystackResult.reference,
+                amount: paystackResult.amount
+            });
+
+            return {
+                reference,
+                paystackStatus: paystackResult.status,
+                transactionStatus: TransactionStatus.COMPLETED,
+                amount: koboToNaira(paystackResult.amount),
+                walletId: transaction.receiverWalletId,
+            };
+        }
+
         return {
             reference,
             paystackStatus: paystackResult.status,
@@ -291,9 +261,7 @@ export class PaymentService {
         };
     }
 
-    /**
-     * Get user's payment history
-     */
+    // get user's payment history
     async getPaymentHistory(userId: string, page: number = 1, limit: number = 20) {
         const skip = (page - 1) * limit;
 
@@ -302,7 +270,7 @@ export class PaymentService {
                 where: {
                     receiverId: userId,
                     transactionType: TransactionType.DEPOSIT,
-                    externalReference: { not: null },  // Only Paystack transactions
+                    externalReference: { not: null },
                 },
                 orderBy: { createdAt: 'desc' },
                 skip,

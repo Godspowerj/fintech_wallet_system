@@ -9,7 +9,7 @@ const fraudController = new FraudController();
 router.use(authenticate);
 router.use(authorize('ADMIN'));
 
-router.get('/flags', fraudController.getFlaggedTransactions);
-router.post('/flags/:flagId/review', fraudController.reviewFlag);
+router.get('/flags', (req, res, next) => fraudController.getFlaggedTransactions(req, res, next));
+router.post('/flags/:flagId/review', (req, res, next) => fraudController.reviewFlag(req, res, next));
 
 export default router;

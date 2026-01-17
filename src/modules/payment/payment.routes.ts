@@ -1,14 +1,5 @@
-/**
- * =============================================================================
- * PAYMENT ROUTES
- * =============================================================================
- * 
- * Endpoints for Paystack payment integration:
- * 
- * POST /api/payments/initialize  - Start wallet funding (requires auth)
- * POST /api/payments/webhook     - Paystack webhook (no auth - called by Paystack)
- * GET  /api/payments/verify/:ref - Verify payment (public - called after checkout)
- * GET  /api/payments/history     - Get user's payment history (requires auth)
+/*
+ * Payment routes - Paystack integration
  */
 
 import { Router } from 'express';
@@ -20,12 +11,7 @@ import { initializeFundingSchema } from './payment.validation';
 const router = Router();
 const paymentController = new PaymentController();
 
-/**
- * POST /api/payments/initialize
- * 
- * Start a wallet funding transaction
- * User must be logged in
- */
+// start wallet funding (auth required)
 router.post(
     '/initialize',
     authenticate,
@@ -33,35 +19,19 @@ router.post(
     (req, res, next) => paymentController.initializeFunding(req, res, next)
 );
 
-/**
- * POST /api/payments/webhook
- * 
- * Paystack webhook endpoint
- * NO AUTH - Paystack calls this directly
- * Signature verified in the service
- */
+// paystack webhook (no auth - called by paystack)
 router.post(
     '/webhook',
     (req, res, next) => paymentController.handleWebhook(req, res, next)
 );
 
-/**
- * GET /api/payments/verify/:reference
- * 
- * Verify payment status after checkout
- * Called when user returns from Paystack
- */
+// verify payment after checkout
 router.get(
     '/verify/:reference',
     (req, res, next) => paymentController.verifyPayment(req, res, next)
 );
 
-/**
- * GET /api/payments/history
- * 
- * Get user's Paystack payment history
- * User must be logged in
- */
+// get payment history (auth required)
 router.get(
     '/history',
     authenticate,

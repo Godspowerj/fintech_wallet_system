@@ -1,15 +1,17 @@
-# 📚 Fintech Wallet API - Self-Paced Learning Roadmap
+# Fintech Wallet API - Learning Roadmap
 
-> **Your Background**: Basic Prisma, PostgreSQL, Express  
-> **Goal**: Master this codebase at your own pace
+A self-paced guide to mastering this codebase.
+
+**See also:**
+- [System Architecture](./SYSTEM_ARCHITECTURE.md) - Diagrams & data flows
+- [Learning Guide](./LEARNING_GUIDE.md) - Quick overview
+- [README](./README.md) - Setup instructions
 
 ---
 
-## 📖 Required Concepts to Learn
+## Required Concepts
 
-Before diving into the code, you need to understand these concepts:
-
-### 1. **TypeScript Advanced Patterns**
+### 1. TypeScript Advanced Patterns
 **What you need to learn:**
 - Generics
 - Type guards

@@ -1,29 +1,18 @@
-/**
- * =============================================================================
- * EMAIL SERVICE - Using Resend
- * =============================================================================
- * 
- * Resend is a modern email API that's easy to use.
- * Sign up at: https://resend.com
- * 
- * Get your API key from: https://resend.com/api-keys
- * Add it to your .env file as RESEND_API_KEY
+/*
+ * Email service using Resend
+ * Get API key from: https://resend.com/api-keys
  */
 
 import { Resend } from 'resend';
 import { env } from '../config/environment';
 import { logger } from './logger';
 
-// Initialize Resend with API key
 const resend = new Resend(env.RESEND_API_KEY);
 
-// Your app's frontend URL (for links in emails)
 const APP_URL = env.FRONTEND_URL || 'http://localhost:5173';
 const FROM_EMAIL = env.FROM_EMAIL || 'FinWallet <onboarding@resend.dev>';
 
-/**
- * Send Password Reset Email
- */
+// send password reset email
 export async function sendPasswordResetEmail(email: string, token: string) {
   const resetLink = `${APP_URL}/reset-password?token=${token}`;
 
@@ -78,9 +67,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   }
 }
 
-/**
- * Send Email Verification Email
- */
+// send email verification
 export async function sendVerificationEmail(email: string, token: string) {
   const verifyLink = `${APP_URL}/verify-email?token=${token}`;
 
@@ -132,9 +119,7 @@ export async function sendVerificationEmail(email: string, token: string) {
   }
 }
 
-/**
- * Send Welcome Email (after verification)
- */
+// send welcome email after signup
 export async function sendWelcomeEmail(email: string, firstName: string) {
   try {
     const { data, error } = await resend.emails.send({
@@ -177,7 +162,7 @@ export async function sendWelcomeEmail(email: string, firstName: string) {
 
     if (error) {
       logger.error('Failed to send welcome email:', error);
-      return null; // Don't throw - welcome email is not critical
+      return null;
     }
 
     logger.info(`Welcome email sent to ${email}`, { emailId: data?.id });
@@ -188,15 +173,11 @@ export async function sendWelcomeEmail(email: string, firstName: string) {
   }
 }
 
-
-/**
- * Send Generic Email (for notification worker)
- * This function can send ANY email with custom subject and content
- */
+// send any custom email
 export async function sendGenericEmail(
-  to: string,        // Recipient email address
-  subject: string,   // Email subject line
-  message: string    // Email content/body (can include HTML)
+  to: string,
+  subject: string,
+  message: string
 ) {
   try {
     const { data, error } = await resend.emails.send({

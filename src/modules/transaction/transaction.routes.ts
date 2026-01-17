@@ -8,10 +8,10 @@ const transactionController = new TransactionController();
 
 router.use(authenticate);
 
-router.post('/transfer', transferRateLimiter, transactionController.transfer);
-router.post('/deposit', transactionController.deposit);
-router.post('/withdraw', transactionController.withdraw);
-router.get('/:transactionId', transactionController.getTransaction);
+router.post('/transfer', transferRateLimiter, (req, res, next) => transactionController.transfer(req, res, next));
+router.post('/deposit', (req, res, next) => transactionController.deposit(req, res, next));
+router.post('/withdraw', (req, res, next) => transactionController.withdraw(req, res, next));
+router.get('/:transactionId', (req, res, next) => transactionController.getTransaction(req, res, next));
 
 export default router;
 
