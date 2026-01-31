@@ -25,8 +25,8 @@ export class PaymentService {
     async initializeFunding(userId: string, walletId: string, amount: number) {
         logger.info('Initializing wallet funding', { userId, walletId, amount });
 
-        if (amount <= 0) {
-            throw new BadRequestError('Amount must be greater than zero');
+        if (amount > 0 && amount <= 100) {
+            throw new BadRequestError('Amount must be greater than 100naira');
         }
 
         // get user email for paystack
@@ -252,6 +252,8 @@ export class PaymentService {
             };
         }
 
+        // If we get here, payment was already processed (COMPLETED/FAILED)
+        // Just return the current status - no need to credit again!
         return {
             reference,
             paystackStatus: paystackResult.status,

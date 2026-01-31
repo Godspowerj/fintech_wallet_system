@@ -30,7 +30,7 @@ export class PaymentController {
     // handle paystack webhook
     async handleWebhook(req: Request, res: Response, next: NextFunction) {
         try {
-            const payload = JSON.stringify(req.body);
+            const payload = JSON.stringify(req.body); 
             const signature = req.headers['x-paystack-signature'] as string;
 
             await paymentService.handleWebhook(payload, signature);

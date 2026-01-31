@@ -59,7 +59,6 @@ export async function initializeTransaction(
             reference,
             metadata,
             currency,
-            // callback_url removed - no frontend redirect needed
         }),
     });
 
